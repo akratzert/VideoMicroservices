@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create Video Processed SNS topic, Video Api SQS queue, and subscription.
+
+Resources:
+  # SNS Topic
+  SnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: VideoProcessed
+
+  # SQS Queue
+  SqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: VideoApiProcessed
+      VisibilityTimeout: 30
+      ReceiveMessageWaitTimeSeconds: 20 # Enable long polling
+
+  # SQS Queue Policy to allow SNS to publish to the queue
+  MySqsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SqsQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SqsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SnsTopic
+
+  # SNS Subscription to link SQS to SNS
+  MySnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SnsTopic
+      Endpoint: !GetAtt SqsQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: false
+
+Outputs:
+  SnsTopicArn:
+    Description: ARN of the SNS Topic
+    Value: !Ref SnsTopic
+  SqsQueueUrl:
+    Description: URL of the SQS Queue
+    Value: !Ref SqsQueue
+  SqsQueueArn:
+    Description: ARN of the SQS Queue
+    Value: !GetAtt SqsQueue.Arn
